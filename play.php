@@ -99,7 +99,7 @@ if (movieDetails_TMDB($movieId, $apiKey, $useRealDebrid) !== false) {
 
 function movieDetails_TMDB($movieId, $apiKey, $useRealDebrid)
 {
-    global $userDefinedOrder, $language, $usePremiumize;
+    global $userDefinedOrder, $language, $usePremiumize, $useTorbox;
 
     // Define the cache key
     $key = $movieId . '_tmdb_url';
@@ -168,7 +168,7 @@ function movieDetails_TMDB($movieId, $apiKey, $useRealDebrid)
                     }
 
                     // Check if torrents should run.
-                    if (!$useRealDebrid && !$usePremiumize && in_array($functionName, ['torrentSites'])) {
+                    if (!$useRealDebrid && !$usePremiumize && !$useTorbox && in_array($functionName, ['torrentSites'])) {
                         continue; //
                     }
 
@@ -346,7 +346,7 @@ function movieDetails_TMDB($movieId, $apiKey, $useRealDebrid)
 
 function seriesDetails_TMDB($movieId, $apiKey, $useRealDebrid, $episodeData)
 {	
-    global $userDefinedOrder, $episodeId, $language, $usePremiumize;
+    global $userDefinedOrder, $episodeId, $language, $usePremiumize, $useTorbox;
 	
 
     // Define the cache key
@@ -419,7 +419,7 @@ function seriesDetails_TMDB($movieId, $apiKey, $useRealDebrid, $episodeData)
                     }
 
                     // Check if torrents should run.
-                    if (!$useRealDebrid && !$usePremiumize && in_array($functionName, ['torrentSites'])) {
+                    if (!$useRealDebrid && !$usePremiumize && !$useTorbox && in_array($functionName, ['torrentSites'])) {
                         continue;
                     }
 
@@ -1436,6 +1436,173 @@ function deleteFiles_RD($torrentIds) {
     return true;
 }
 
+////////////////////////////// TorBox ///////////////////////////////
+
+function torboxRequest($method, $path, $query = [], $postFields = null)
+{
+    global $torboxApiKey, $timeOut;
+
+    $url = 'https://api.torbox.app/v1/api/' . ltrim($path, '/');
+    if (!empty($query)) {
+        $url .= '?' . http_build_query($query);
+    }
+
+    $headers = [
+        'Authorization: Bearer ' . $torboxApiKey,
+        'Accept: application/json',
+    ];
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, $timeOut);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    if ($postFields !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+    }
+
+    $response = curl_exec($ch);
+    if ($response === false) {
+        curl_close($ch);
+        return false;
+    }
+
+    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $responseHeaders = substr($response, 0, $headerSize);
+    $responseBody = substr($response, $headerSize);
+    curl_close($ch);
+
+    preg_match('/^Location:\s*(.+)$/mi', $responseHeaders, $locationMatch);
+
+    return [
+        'status' => $statusCode,
+        'body' => $responseBody,
+        'json' => json_decode($responseBody, true),
+        'location' => isset($locationMatch[1]) ? trim($locationMatch[1]) : null,
+    ];
+}
+
+function torboxFindValue($value, $keys)
+{
+    if (!is_array($value)) {
+        return null;
+    }
+
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $value)) {
+            return $value[$key];
+        }
+    }
+
+    foreach ($value as $child) {
+        $result = torboxFindValue($child, $keys);
+        if ($result !== null) {
+            return $result;
+        }
+    }
+
+    return null;
+}
+
+function torboxFindUrl($value)
+{
+    if (is_string($value) && preg_match('#^https?://#i', $value)) {
+        return $value;
+    }
+
+    if (is_array($value)) {
+        foreach (['download_url', 'download', 'stream_url', 'url', 'link'] as $key) {
+            if (!empty($value[$key]) && is_string($value[$key]) && preg_match('#^https?://#i', $value[$key])) {
+                return $value[$key];
+            }
+        }
+
+        foreach ($value as $child) {
+            $result = torboxFindUrl($child);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+    }
+
+    return null;
+}
+
+function getStreamingLink_Torbox($torrent, $tSite)
+{
+    global $torboxApiKey;
+
+    if (empty($torboxApiKey) || empty($torrent['hash'])) {
+        return false;
+    }
+
+    $magnet = 'magnet:?xt=urn:btih:' . $torrent['hash'];
+    $created = torboxRequest('POST', 'torrents/createtorrent', [], [
+        'magnet' => $magnet,
+        'seed' => 1,
+        'add_only_if_cached' => 'true',
+    ]);
+
+    if (!$created || $created['status'] < 200 || $created['status'] >= 300) {
+        return false;
+    }
+
+    $torrentId = torboxFindValue($created['json'], ['torrent_id', 'id']);
+    if ($torrentId === null) {
+        return false;
+    }
+
+    $torrentInfo = torboxRequest('GET', 'torrents/mylist', [
+        'id' => $torrentId,
+        'bypass_cache' => 'true',
+    ]);
+    $info = $torrentInfo && is_array($torrentInfo['json']) ? $torrentInfo['json'] : [];
+    $files = torboxFindValue($info, ['files']);
+    $fileId = 0;
+
+    if (is_array($files) && !empty($files)) {
+        $normalizedFiles = [];
+        foreach ($files as $file) {
+            if (!is_array($file)) {
+                continue;
+            }
+            $normalizedFiles[] = [
+                'id' => $file['id'] ?? $file['file_id'] ?? 0,
+                'path' => $file['path'] ?? $file['name'] ?? $file['short_name'] ?? '',
+            ];
+        }
+
+        $video = findVideoIndex_RD($normalizedFiles);
+        if (!$video) {
+            return false;
+        }
+        $fileId = $video['id'];
+    }
+
+    $download = torboxRequest('GET', 'torrents/requestdl', [
+        'token' => $torboxApiKey,
+        'torrent_id' => $torrentId,
+        'file_id' => $fileId,
+        'redirect' => 'true',
+        'append_name' => 'true',
+    ]);
+
+    if ($download) {
+        $url = $download['location'] ?: torboxFindUrl($download['json']);
+        if ($url) {
+            return $url;
+        }
+    }
+
+    return false;
+}
+
 ////////////////////////////// Premiumize ///////////////////////////////
 
 function instantAvailability_PM($hashes, $torrents){
@@ -1814,7 +1981,7 @@ function filterCompareTitles($firstTitle, $secondTitle, $tvpack=false){
 
 function torrentSites($movieId, $imdbId, $title, $year = null)
 {
-    global $timeOut, $maxResolution, $torrentData, $type, $season, $episode, $seasonNoPad, $episodeNoPad, $useRealDebrid, $usePremiumize, $deleteRDFiles;
+    global $timeOut, $maxResolution, $torrentData, $type, $season, $episode, $seasonNoPad, $episodeNoPad, $useRealDebrid, $usePremiumize, $useTorbox, $deleteRDFiles;
 	
 	$torrentTimeOut = 5;
 
@@ -2004,6 +2171,17 @@ function torrentSites($movieId, $imdbId, $title, $year = null)
             $returnedPremiumLink = selectHashByPreferences($torrentData, $maxResolution, 'torrentSites', 'Premiumize');
         }
 
+        if (empty($returnedPremiumLink)) {
+            if ($usePremiumize === true && $service == 'Premiumize') {
+                $htmlContent .= "<li>Premiumize (0) - $premTimeDifference sec.</li>";
+            }
+            $service = 'Torbox';
+        }
+
+        if ($useTorbox === true && $service == 'Torbox') {
+            $returnedPremiumLink = selectHashByPreferences($torrentData, $maxResolution, 'torrentSites', 'Torbox');
+        }
+
         if ($returnedPremiumLink !== false) {
 
             if ($useRealDebrid === true && $service == 'RealDebrid') {
@@ -2013,6 +2191,10 @@ function torrentSites($movieId, $imdbId, $title, $year = null)
             if ($usePremiumize === true && $service == 'Premiumize') {
                 $pageUrl = 'https://premiumize.me/';
                 $htmlContent .= "<li>Premiumize ($returnedPremiumLink[1]) - $premTimeDifference sec.</li>";
+            }
+            if ($useTorbox === true && $service == 'Torbox') {
+                $pageUrl = 'https://torbox.app/';
+                $htmlContent .= "<li>TorBox ($returnedPremiumLink[1])</li>";
             }
             $htmlContent .= '</div><a href="javascript:void(0);" onclick="openPopup(\'' . $hashedRandomId . '\')">Click to view...</a>';
             logDetails('torrentSites', $htmlContent, 'successful', $GLOBALS['logTitle'], $pageUrl, $returnedPremiumLink[0], $type, $GLOBALS['movieId'], $type === 'series' ? $GLOBALS['seriesCode'] : 'n/a');
@@ -2027,6 +2209,10 @@ function torrentSites($movieId, $imdbId, $title, $year = null)
             if ($usePremiumize === true && $service == 'Premiumize') {
                 $pageUrl = 'https://premiumize.me/';
                 $htmlContent .= "<li>Premiumize (0) - $premTimeDifference sec.</li>";
+            }
+            if ($useTorbox === true && $service == 'Torbox') {
+                $pageUrl = 'https://torbox.app/';
+                $htmlContent .= "<li>TorBox (0)</li>";
             }
 
             $htmlContent .= '</div><a href="javascript:void(0);" onclick="openPopup(\'' . $hashedRandomId . '\')">Click to view...</a>';
@@ -2043,6 +2229,10 @@ function torrentSites($movieId, $imdbId, $title, $year = null)
         if ($usePremiumize === true && $service == 'Premiumize') {
             $pageUrl = 'https://premiumize.me/';
             $htmlContent .= "<li>Premiumize: 0</li>";
+        }
+        if ($useTorbox === true) {
+            $pageUrl = 'https://torbox.app/';
+            $htmlContent .= "<li>TorBox: 0</li>";
         }
 
         $htmlContent .= '</div><a href="javascript:void(0);" onclick="openPopup(\'' . $hashedRandomId . '\')">Click to view...</a>';
@@ -2152,7 +2342,7 @@ function checkLinkStatusCode($url, $verify = false)
 
 function selectHashByPreferences($torrents, $maxResolution, $tSite, $service)
 {
-    global $PRIVATE_TOKEN, $usePremiumize, $useRealDebrid, $seasonNoPad;
+    global $PRIVATE_TOKEN, $usePremiumize, $useRealDebrid, $useTorbox, $seasonNoPad;
 
     // === Filter out DTS ===
     $filteredOutCount = 0;
@@ -2187,6 +2377,7 @@ function selectHashByPreferences($torrents, $maxResolution, $tSite, $service)
     $initialCount = count($torrents);
     $availableCountRealDebrid = $initialCount;
     $availableCountPremiumize = $initialCount;
+    $availableCountTorbox = $initialCount;
 
     // === Sorting + resolution filtering before any service checks ===
     sortTorrentsByQuality($torrents);
@@ -2216,6 +2407,17 @@ function selectHashByPreferences($torrents, $maxResolution, $tSite, $service)
                 return [
                     $getStreamingLinkReturn,
                     $availableCountPremiumize,
+                ];
+            }
+        }
+
+        // === TorBox branch ===
+        elseif ($useTorbox === true && $service === 'Torbox') {
+            $getStreamingLinkReturn = getStreamingLink_Torbox($torrent, $tSite);
+            if ($getStreamingLinkReturn) {
+                return [
+                    $getStreamingLinkReturn,
+                    $availableCountTorbox,
                 ];
             }
         }

@@ -23,6 +23,10 @@ $PRIVATE_TOKEN = '';
 // Don't worry about this setting if you aren't planning on using Premiumize.
 $premiumizeApiKey = '';
 
+// Replace this with your TorBox API key - https://torbox.app/settings
+// Don't worry about this setting if you aren't planning on using TorBox.
+$torboxApiKey = '';
+
 // By default, on a local network the server identifies as "localhost" or "127.0.0.1" which isn't
 // accessible from other devices in your local network. Set this if you're running the script on
 // a local server and want to access it from other devices (firestick, android, etc. If so, specify
@@ -69,6 +73,10 @@ $useRealDebrid = false; // Requires a real debrid private token added above.
 // set it to true if you want to use premiumize when streaming torrents. 
 // Example: The value can be either true or false.
 $usePremiumize = false; // Requires a Premiumize API Key added above.
+
+// Leave this setting as false if you aren't intending on using TorBox links.
+// Set it to true after adding your TorBox API key above.
+$useTorbox = false; // Requires a TorBox API key added above.
 
 // maxResolution is the upper limit for video resolution preference in
 // pixels (e.g., 1080 for 1080p). If no links match this exact resolution,

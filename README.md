@@ -97,6 +97,8 @@ Generate dynamic playlists for Live TV, Movies and TV Series using a mock versio
 
 1. **Configuration**: Start by setting up the script with the required free [TMDB API Key](https://developer.themoviedb.org/docs/getting-started) and an optional private key for [Real Debrid](https://real-debrid.com/apitoken) or [Premiumize](https://www.premiumize.me/account), which are not mandatory.
 
+  TorBox is also supported for torrent-backed playback. Add your API key from [TorBox settings](https://torbox.app/settings) to `$torboxApiKey` in `config.php`, then set `$useTorbox = true`. You can leave the Real-Debrid and Premiumize fields disabled and blank.
+
 2. **Xtream Codes Integration**: Enter the IP address or domain as an Xtream Codes server. Any username and password will work since the script doesn't require authentication. This will automatically load the Live TV, Movies and TV Series playlists into the app.
 
 3. **Non-Xtream Codes Apps**: If your app does not support Xtream Codes, load http://IP_ADDRESS/player_api.php?action=get_vod_streams (replace IP_ADDRESS with your computers ip address) in your browser, then locate the `playlist.m3u8` in the same folder as the script and load it as an M3U playlist. Note that the M3U8 playlists are available for movies and live TV only; TV series cannot be loaded as an M3U playlist.
