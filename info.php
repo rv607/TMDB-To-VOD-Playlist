@@ -26,9 +26,9 @@ function HeadlessVidX_online() {
  
    global $HeadlessVidX_Address;
    
-   $response = @file_get_contents('http://' . $HeadlessVidX_Address . '/ping');
+   $response = @file_get_contents('https://' . $HeadlessVidX_Address . '/ping');
     if(strpos($response, 'Server is running')){
-        return "✔️ - <strong>Server: </strong><a href='http://$HeadlessVidX_Address/' target=_blank'>http://$HeadlessVidX_Address/</a>";
+        return "✔️ - <strong>Server: </strong><a href='https://$HeadlessVidX_Address/' target=_blank'>http://$HeadlessVidX_Address/</a>";
     } else {
         $nodejsMessage = '<span style="color:red;font-size:14px;">❌ <br> Follow the "HeadlessVidX/Install Instructions.txt"</span>';
         return $nodejsMessage;
