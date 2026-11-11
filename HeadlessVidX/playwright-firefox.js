@@ -35,7 +35,7 @@ const CONFIG = {
     
     // Timeouts
     DOWNLOAD_TIMEOUT: 300000, // 5 minutes
-    LAUNCH_TIMEOUT: 5000,
+    LAUNCH_TIMEOUT: 60000,
     
     // Auto-update settings
     CHECK_UPDATE_INTERVAL: 86400000, // 24 hours
