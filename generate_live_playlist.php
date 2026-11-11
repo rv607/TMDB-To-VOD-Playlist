@@ -15,8 +15,8 @@ function runLivePlaylistGenerate() {
     $include = filter_var($INCLUDE_ADULT_VOD ?? false, FILTER_VALIDATE_BOOLEAN);
 
     $playlistUrl = $include
-        ? 'http://drewlive24.duckdns.org:8081/DrewLive/MergedPlaylist.m3u8'
-        : 'http://drewlive24.duckdns.org:8081/DrewLive/MergedCleanPlaylist.m3u8';
+        ? 'https://iptv-org.github.io/iptv/index.m3u'
+        : 'https://iptv-org.github.io/iptv/countries/us.m3u';
 
     $categoriesFile = __DIR__ . "/channels/get_live_categories.json";
 
