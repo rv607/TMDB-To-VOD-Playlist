@@ -1,7 +1,7 @@
 # ------------------------------------------------------------
 # Base image: Node.js 20.x on Debian Bullseye
 # ------------------------------------------------------------
-FROM node:20-bullseye
+FROM node:20-bookwork
 
 # ------------------------------------------------------------
 # Basic tooling (needed for playwright-install-deps)
