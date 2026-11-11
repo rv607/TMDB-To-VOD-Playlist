@@ -3748,7 +3748,7 @@ function HeadlessVidX($movieId, $imdbId, $title)
 
             /* remember apiUrl in case this one wins */
             $currentApi = $cmd;
-            $reqUrl     = "http://$HeadlessVidX_Address/get-video?url="
+            $reqUrl     = "https://$HeadlessVidX_Address/get-video?url="
                         . urlencode($cmd);
 
             $ch = curl_init($reqUrl);
@@ -3933,7 +3933,7 @@ function HeadlessVidX_old($movieId, $imdbId, $title)
             $command = str_replace('[[E]]', $episodeNoPad, $command);
 
             $runCommand = $command;
-            $url = 'http://' . $HeadlessVidX_Address . '/get-video?url=' . urlencode($runCommand);
+            $url = 'https://' . $HeadlessVidX_Address . '/get-video?url=' . urlencode($runCommand);
 
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);
